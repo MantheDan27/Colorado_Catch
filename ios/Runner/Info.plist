@@ -36,7 +36,6 @@
 	<array>
 		<string>remote-notification</string>
 	</array>
-	<!-- TODO: replace REVERSED_CLIENT_ID with the value from GoogleService-Info.plist, see SETUP.md -->
 	<key>CFBundleURLTypes</key>
 	<array>
 		<dict>
@@ -44,7 +43,7 @@
 			<string>Editor</string>
 			<key>CFBundleURLSchemes</key>
 			<array>
-				<string>REVERSED_CLIENT_ID</string>
+				<string>com.googleusercontent.apps.280041954294-dif0443vvk2sbq8k2tuscbt7neb3huu1</string>
 			</array>
 		</dict>
 	</array>

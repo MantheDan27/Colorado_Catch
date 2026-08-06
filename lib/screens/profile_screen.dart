@@ -1,14 +1,9 @@
-import 'dart:io';
-
 import 'package:flutter/material.dart';
-import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 
 import '../models/user_profile.dart';
 import '../services/auth_service.dart';
 import '../services/firestore_service.dart';
-import '../services/storage_service.dart';
-import '../widgets/loading_indicator.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -18,31 +13,12 @@ class ProfileScreen extends StatefulWidget {
 }
 
 class _ProfileScreenState extends State<ProfileScreen> {
-  bool _isSaving = false;
-
-  Future<void> _uploadImage() async {
-    final picker = ImagePicker();
-    final picked = await picker.pickImage(source: ImageSource.gallery, imageQuality: 80);
-    if (picked == null || !mounted) return;
-
-    final authService = Provider.of<AuthService>(context, listen: false);
-    final storageService = Provider.of<StorageService>(context, listen: false);
-    final firestore = Provider.of<FirestoreService>(context, listen: false);
-    final user = authService.currentUser;
-    if (user == null) return;
-
-    setState(() => _isSaving = true);
-
-    final downloadUrl = await storageService.uploadProfileImage(user.uid, File(picked.path));
-    await firestore.saveUserProfile(UserProfile(
-      uid: user.uid,
-      email: user.email ?? '',
-      displayName: user.displayName,
-      photoUrl: downloadUrl,
-    ));
-
-    if (!mounted) return;
-    setState(() => _isSaving = false);
+  // Profile photo upload is stubbed out until Cloud Storage is provisioned
+  // (requires the Blaze plan) — see StorageService and SETUP.md.
+  void _showUploadComingSoon() {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Profile photo upload is coming soon.')),
+    );
   }
 
   @override
@@ -73,8 +49,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
               const SizedBox(height: 8),
               Text(user.email ?? ''),
               const SizedBox(height: 24),
-              ElevatedButton(onPressed: _uploadImage, child: const Text('Upload Profile Photo')),
-              if (_isSaving) const Padding(padding: EdgeInsets.only(top: 16), child: LoadingIndicator()),
+              OutlinedButton(
+                onPressed: _showUploadComingSoon,
+                child: const Text('Upload Profile Photo (coming soon)'),
+              ),
             ],
           ),
         );

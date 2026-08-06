@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 
 import 'screens/home_screen.dart';
 import 'screens/login_screen.dart';
+import 'screens/splash_screen.dart';
 import 'services/analytics_service.dart';
 import 'services/auth_service.dart';
 import 'services/firestore_service.dart';
@@ -47,6 +48,7 @@ class AuthenticationWrapper extends StatefulWidget {
 
 class _AuthenticationWrapperState extends State<AuthenticationWrapper> {
   bool _initialized = false;
+  bool _showSplash = true;
 
   @override
   void didChangeDependencies() {
@@ -64,6 +66,10 @@ class _AuthenticationWrapperState extends State<AuthenticationWrapper> {
 
   @override
   Widget build(BuildContext context) {
+    if (_showSplash) {
+      return SplashScreen(onStart: () => setState(() => _showSplash = false));
+    }
+
     final authService = Provider.of<AuthService>(context);
 
     return StreamBuilder<User?>(

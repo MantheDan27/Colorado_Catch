@@ -1,0 +1,54 @@
+{
+  "project_info": {
+    "project_number": "280041954294",
+    "project_id": "colorado-catch",
+    "storage_bucket": "colorado-catch.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:280041954294:android:ca510a02d72ff1946ac5d7",
+        "android_client_info": {
+          "package_name": "com.coloradocatch.colorado_catch"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "280041954294-n2915715mncfue4iebo05ds7feflvnec.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.coloradocatch.colorado_catch",
+            "certificate_hash": "4ddae51bda62682d8323b2b0b3ae3140a1746eb6"
+          }
+        },
+        {
+          "client_id": "280041954294-slnghu0tp6enamr8274agrqtvehfkk3p.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyC6F7jUeBCVFVfQ8Ic2ByUi2v8SnBrxLYM"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "280041954294-slnghu0tp6enamr8274agrqtvehfkk3p.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "280041954294-dif0443vvk2sbq8k2tuscbt7neb3huu1.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.coloradocatch.coloradoCatch"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

@@ -61,19 +61,18 @@ class DefaultFirebaseOptions {
   );
 
   static const FirebaseOptions android = FirebaseOptions(
-    apiKey: 'YOUR_ANDROID_API_KEY',
-    appId: 'YOUR_ANDROID_APP_ID',
-    messagingSenderId: 'YOUR_MESSAGING_SENDER_ID',
-    projectId: 'YOUR_PROJECT_ID',
-    storageBucket: 'YOUR_PROJECT_ID.appspot.com',
+    apiKey: 'AIzaSyC6F7jUeBCVFVfQ8Ic2ByUi2v8SnBrxLYM',
+    appId: '1:280041954294:android:ca510a02d72ff1946ac5d7',
+    messagingSenderId: '280041954294',
+    projectId: 'colorado-catch',
+    storageBucket: 'colorado-catch.firebasestorage.app',
   );
-
   static const FirebaseOptions ios = FirebaseOptions(
-    apiKey: 'YOUR_IOS_API_KEY',
-    appId: 'YOUR_IOS_APP_ID',
-    messagingSenderId: 'YOUR_MESSAGING_SENDER_ID',
-    projectId: 'YOUR_PROJECT_ID',
-    storageBucket: 'YOUR_PROJECT_ID.appspot.com',
+    apiKey: 'AIzaSyDCWWJb6GLZiFjDER63kEjUtz6-n29aOPc',
+    appId: '1:280041954294:ios:e76249ded2c96bc16ac5d7',
+    messagingSenderId: '280041954294',
+    projectId: 'colorado-catch',
+    storageBucket: 'colorado-catch.firebasestorage.app',
     iosBundleId: 'com.coloradocatch.coloradoCatch',
   );
 }
