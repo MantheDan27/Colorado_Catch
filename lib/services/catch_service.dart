@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
+import '../utils/points_calculator.dart';
 import 'firestore_service.dart';
 
 /// Logs a fish catch and keeps the leaderboard's per-user aggregate in sync.
@@ -19,12 +20,14 @@ class CatchService {
     double? speciesConfidence,
     required bool wasManualOverride,
     List<Map<String, dynamic>> aiSuggestions = const [],
+    required double lengthInches,
     double? latitude,
     double? longitude,
   }) async {
     final catchRef = _firestore.collection('catches').doc();
     final leaderboardRef = _firestoreService.leaderboard.doc(userId);
     final now = Timestamp.now();
+    final points = calculateCatchPoints(species: species, lengthInches: lengthInches);
 
     final catchData = {
       'userId': userId,
@@ -33,6 +36,8 @@ class CatchService {
       'speciesConfidence': speciesConfidence,
       'wasManualOverride': wasManualOverride,
       'aiSuggestions': aiSuggestions,
+      'lengthInches': lengthInches,
+      'points': points,
       'latitude': latitude,
       'longitude': longitude,
       'createdAt': now,
@@ -42,11 +47,13 @@ class CatchService {
       final leaderboardSnap = await tx.get(leaderboardRef);
       final leaderboardData = leaderboardSnap.data() as Map<String, dynamic>?;
       final currentCount = (leaderboardData?['catchCount'] as int?) ?? 0;
+      final currentPoints = (leaderboardData?['totalPoints'] as int?) ?? 0;
 
       tx.set(catchRef, catchData);
       tx.set(leaderboardRef, {
         'displayName': userName,
         'catchCount': currentCount + 1,
+        'totalPoints': currentPoints + points,
         'lastCatchAt': now,
       }, SetOptions(merge: true));
     });
@@ -55,7 +62,7 @@ class CatchService {
       await _firestoreService.addLocation(catchRef.id, {
         'latitude': latitude,
         'longitude': longitude,
-        'title': '$species — $userName',
+        'title': '$species ($points pts) — $userName',
       });
     }
   }

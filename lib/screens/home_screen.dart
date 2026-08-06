@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../services/auth_service.dart';
 import '../services/firestore_service.dart';
 import '../services/push_service.dart';
+import '../widgets/points_pill.dart';
 import 'catch_capture_screen.dart';
 import 'chat_screen.dart';
 import 'leaderboard_screen.dart';
@@ -66,11 +67,13 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     final authService = Provider.of<AuthService>(context);
+    final uid = authService.currentUser?.uid;
 
     return Scaffold(
       appBar: AppBar(
         title: const Text('Colorado Catch'),
         actions: [
+          if (uid != null) PointsPill(uid: uid),
           IconButton(
             icon: const Icon(Icons.logout),
             onPressed: authService.signOut,

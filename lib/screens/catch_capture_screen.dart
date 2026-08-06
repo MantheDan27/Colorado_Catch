@@ -10,6 +10,7 @@ import '../models/fish_suggestion.dart';
 import '../services/auth_service.dart';
 import '../services/catch_service.dart';
 import '../services/fish_id_service.dart';
+import '../utils/points_calculator.dart';
 import '../widgets/loading_indicator.dart';
 
 enum _Stage { pickingPhoto, identifying, reviewing, saving }
@@ -30,6 +31,7 @@ class _CatchCaptureScreenState extends State<CatchCaptureScreen> {
   List<FishSuggestion> _suggestions = [];
   String? _selectedSpecies;
   final _manualSpeciesController = TextEditingController();
+  final _lengthController = TextEditingController();
   bool _useManualEntry = false;
   String? _error;
   Position? _position;
@@ -43,6 +45,7 @@ class _CatchCaptureScreenState extends State<CatchCaptureScreen> {
   @override
   void dispose() {
     _manualSpeciesController.dispose();
+    _lengthController.dispose();
     super.dispose();
   }
 
@@ -109,6 +112,12 @@ class _CatchCaptureScreenState extends State<CatchCaptureScreen> {
       return;
     }
 
+    final lengthInches = double.tryParse(_lengthController.text.trim());
+    if (lengthInches == null || lengthInches <= 0) {
+      setState(() => _error = 'Enter the fish\'s length in inches.');
+      return;
+    }
+
     setState(() {
       _stage = _Stage.saving;
       _error = null;
@@ -128,6 +137,7 @@ class _CatchCaptureScreenState extends State<CatchCaptureScreen> {
         aiSuggestions: _suggestions
             .map((s) => {'species': s.species, 'confidence': s.confidence})
             .toList(growable: false),
+        lengthInches: lengthInches,
         latitude: _position?.latitude,
         longitude: _position?.longitude,
       );
@@ -202,15 +212,48 @@ class _CatchCaptureScreenState extends State<CatchCaptureScreen> {
             child: TextField(
               controller: _manualSpeciesController,
               decoration: const InputDecoration(labelText: 'Species name'),
+              onChanged: (_) => setState(() {}),
             ),
           ),
-        const SizedBox(height: 24),
+        const SizedBox(height: 16),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: TextField(
+            controller: _lengthController,
+            decoration: const InputDecoration(labelText: 'Length (inches)'),
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            onChanged: (_) => setState(() {}),
+          ),
+        ),
+        const SizedBox(height: 8),
+        _buildPointsPreview(),
+        const SizedBox(height: 16),
         if (_error != null) ...[
           Text(_error!, style: const TextStyle(color: Colors.red)),
           const SizedBox(height: 16),
         ],
         ElevatedButton(onPressed: _confirm, child: const Text('Log Catch')),
       ],
+    );
+  }
+
+  Widget _buildPointsPreview() {
+    final species = _useManualEntry ? _manualSpeciesController.text.trim() : _selectedSpecies;
+    final lengthInches = double.tryParse(_lengthController.text.trim());
+    if (species == null || species.isEmpty || lengthInches == null || lengthInches <= 0) {
+      return const SizedBox.shrink();
+    }
+
+    final points = calculateCatchPoints(species: species, lengthInches: lengthInches);
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: Row(
+        children: [
+          const Icon(Icons.monetization_on, color: Colors.amber),
+          const SizedBox(width: 8),
+          Text('Worth $points points', style: const TextStyle(fontWeight: FontWeight.bold)),
+        ],
+      ),
     );
   }
 }

@@ -38,9 +38,14 @@ class FirestoreService {
     return locations.doc(id).set(location);
   }
 
-  /// Ranked by raw catch count — an intentional MVP placeholder; see
-  /// LeaderboardScreen and CatchService.logCatch for where scoring lives.
+  /// Ranked by totalPoints (size x species rarity — see
+  /// lib/utils/points_calculator.dart and CatchService.logCatch).
   Stream<QuerySnapshot> leaderboardStream() {
-    return leaderboard.orderBy('catchCount', descending: true).limit(50).snapshots();
+    return leaderboard.orderBy('totalPoints', descending: true).limit(50).snapshots();
+  }
+
+  /// A single user's leaderboard doc — used for the coin pill on HomeScreen.
+  Stream<DocumentSnapshot> leaderboardEntry(String uid) {
+    return leaderboard.doc(uid).snapshots();
   }
 }

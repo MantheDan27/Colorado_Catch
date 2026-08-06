@@ -141,9 +141,10 @@ Sign up with an email, sign in with Google — you should land on the **Map** ta
 first, with Colorado fishing waters/Gold Medal streams already labeled (Maps API keys
 still required for the map to render at all). Tap the center camera button, take/pick
 a photo, confirm a species (AI suggestion or manual entry — needs step 3 for real AI
-results), and check that a new pin appears on the map and the **Leaderboard** tab's
-count goes up. That exercises Auth, Firestore, Maps, and the catch-logging flow —
-everything currently live except persisted photos (see step 7).
+results) and a length, and check that: a new pin appears on the map, the coin pill in
+the app bar goes up, and the **Leaderboard** tab reflects the new point total. That
+exercises Auth, Firestore, Maps, and the catch-logging flow — everything currently
+live except persisted photos (see step 7).
 
 ## Notes / follow-ups intentionally left out of the MVP
 
@@ -154,6 +155,8 @@ everything currently live except persisted photos (see step 7).
 - No app icons/splash branding yet beyond the launch screen — the scaffold ships
   Flutter's default app icon.
 - Release signing (`android/key.properties`, Xcode signing team) isn't configured.
-- Leaderboard scoring is raw catch count for the MVP (no species-rarity or size
-  weighting) — see `FirestoreService.leaderboardStream` and `CatchService.logCatch`
-  for where that would extend.
+- Leaderboard points = fish length (inches) x a species rarity multiplier — see
+  `lib/utils/points_calculator.dart` and the curated tier list in
+  `lib/data/species_rarity.dart`. It's a hand-maintained MVP list of Colorado
+  gamefish; unrecognized/free-typed species default to the common tier, so
+  scoring never breaks, but the list is worth expanding as real species show up.

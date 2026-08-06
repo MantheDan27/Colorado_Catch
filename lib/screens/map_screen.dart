@@ -56,6 +56,12 @@ class _MapScreenState extends State<MapScreen> {
           markers: {..._overlays.markers, ...liveMarkers},
           polylines: _overlays.polylines,
           polygons: _overlays.polygons,
+          // Pinch-to-zoom and drag-to-pan are GoogleMap defaults, but made
+          // explicit here since free exploration of the map is the point.
+          zoomGesturesEnabled: true,
+          scrollGesturesEnabled: true,
+          rotateGesturesEnabled: true,
+          zoomControlsEnabled: true, // on-screen +/- buttons (Android only)
         );
       },
     );
