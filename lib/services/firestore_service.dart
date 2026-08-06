@@ -7,9 +7,14 @@ class FirestoreService {
   CollectionReference get profiles => _firestore.collection('profiles');
   CollectionReference get chats => _firestore.collection('chats');
   CollectionReference get locations => _firestore.collection('locations');
+  CollectionReference get leaderboard => _firestore.collection('leaderboard');
 
   Future<void> saveUserProfile(UserProfile profile) {
     return profiles.doc(profile.uid).set(profile.toMap(), SetOptions(merge: true));
+  }
+
+  Future<void> updatePushToken(String uid, String token) {
+    return profiles.doc(uid).set({'pushToken': token}, SetOptions(merge: true));
   }
 
   Stream<UserProfile?> userProfileStream(String uid) {
@@ -31,5 +36,11 @@ class FirestoreService {
 
   Future<void> addLocation(String id, Map<String, dynamic> location) {
     return locations.doc(id).set(location);
+  }
+
+  /// Ranked by raw catch count — an intentional MVP placeholder; see
+  /// LeaderboardScreen and CatchService.logCatch for where scoring lives.
+  Stream<QuerySnapshot> leaderboardStream() {
+    return leaderboard.orderBy('catchCount', descending: true).limit(50).snapshots();
   }
 }

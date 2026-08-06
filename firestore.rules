@@ -25,10 +25,32 @@ service cloud.firestore {
 
     // Catch-spot map pins. MVP: any signed-in user can add a pin; editing/
     // deleting is left for a follow-up once pins track a createdBy field.
+    // (CatchService.logCatch also writes here for catches with a location.)
     match /locations/{locationId} {
       allow read: if request.auth != null;
       allow create: if request.auth != null;
       allow update, delete: if false;
+    }
+
+    // Logged catches — immutable audit trail (no edit/delete), same shape as
+    // chat messages. Readable by any signed-in user (map + leaderboard both
+    // read from here); create only allowed for your own userId.
+    match /catches/{catchId} {
+      allow read: if request.auth != null;
+      allow create: if request.auth != null
+                    && request.resource.data.userId == request.auth.uid;
+      allow update, delete: if false;
+    }
+
+    // Leaderboard aggregate (one doc per user, catchCount + displayName).
+    // Publicly readable; writes are only ever made transactionally by
+    // CatchService.logCatch, scoped to the caller's own doc. Rules can't see
+    // "this write only happens alongside a catches/ create" across
+    // documents, so this is the same soft trust boundary as /locations above
+    // — accepted MVP tradeoff, not a regression.
+    match /leaderboard/{uid} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null && request.auth.uid == uid;
     }
   }
 }

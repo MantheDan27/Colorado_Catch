@@ -3,11 +3,14 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import 'config.dart';
 import 'screens/home_screen.dart';
 import 'screens/login_screen.dart';
 import 'screens/splash_screen.dart';
 import 'services/analytics_service.dart';
 import 'services/auth_service.dart';
+import 'services/catch_service.dart';
+import 'services/fish_id_service.dart';
 import 'services/firestore_service.dart';
 import 'services/push_service.dart';
 import 'services/storage_service.dart';
@@ -25,6 +28,8 @@ class App extends StatelessWidget {
         Provider(create: (_) => StorageService()),
         Provider(create: (_) => PushService()),
         Provider(create: (_) => AnalyticsService(FirebaseAnalytics.instance)),
+        Provider(create: (context) => CatchService(context.read<FirestoreService>())),
+        Provider(create: (_) => FishIdService(clientId: fishialClientId, clientSecret: fishialClientSecret)),
       ],
       child: MaterialApp(
         title: 'Colorado Catch',

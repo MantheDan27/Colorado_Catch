@@ -1,7 +1,7 @@
 name: colorado_catch
 description: A multiplatform Flutter app for discovering and tracking Colorado fishing.
 publish_to: 'none'
-version: 0.1.0+1
+version: 0.2.0+2
 environment:
   sdk: ^3.12.2
 
@@ -14,14 +14,19 @@ dependencies:
   firebase_auth: ^6.5.7
   google_sign_in: ^6.3.0
   cloud_firestore: ^6.8.0
-  # firebase_storage and image_picker are currently unused in lib/ — profile
-  # photo upload is stubbed out (ProfileScreen) until the project is on the
-  # Blaze plan and a Storage bucket exists. See StorageService and SETUP.md.
+  # firebase_storage is currently unused in lib/ — profile *and* catch photo
+  # upload are both stubbed out (ProfileScreen, CatchCaptureScreen) until the
+  # project is on the Blaze plan and a Storage bucket exists. See
+  # StorageService and SETUP.md. image_picker IS used (CatchCaptureScreen
+  # captures a photo transiently to send to Fishial.AI — it just isn't
+  # persisted anywhere).
   firebase_storage: ^13.4.6
   firebase_messaging: ^16.5.0
   firebase_analytics: ^12.4.6
   google_maps_flutter: ^2.18.0
   image_picker: ^1.2.3
+  http: ^1.2.0 # Fishial.AI species-ID REST calls — see FishIdService.
+  geolocator: ^13.0.0 # best-effort catch location for the map pin.
 
 dev_dependencies:
   flutter_test:
@@ -32,3 +37,4 @@ flutter:
   uses-material-design: true
   assets:
     - assets/images/
+    - assets/data/

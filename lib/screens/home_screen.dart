@@ -1,11 +1,12 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../services/auth_service.dart';
 import '../services/firestore_service.dart';
 import '../services/push_service.dart';
+import 'catch_capture_screen.dart';
 import 'chat_screen.dart';
+import 'leaderboard_screen.dart';
 import 'profile_screen.dart';
 import 'map_screen.dart';
 
@@ -19,10 +20,13 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   int _currentIndex = 0;
 
+  // Map is the home/default tab. Order matches the nav bar's left-to-right
+  // layout below (two destinations either side of the center camera notch).
   final _tabs = const [
-    ProfileScreen(),
     MapScreen(),
+    LeaderboardScreen(),
     ChatScreen(),
+    ProfileScreen(),
   ];
 
   @override
@@ -41,8 +45,22 @@ class _HomeScreenState extends State<HomeScreen> {
 
     final user = authService.currentUser;
     if (user != null) {
-      await firestoreService.profiles.doc(user.uid).set({'pushToken': token}, SetOptions(merge: true));
+      await firestoreService.updatePushToken(user.uid, token);
     }
+  }
+
+  void _openCatchCapture() {
+    Navigator.of(context).push(MaterialPageRoute(builder: (_) => const CatchCaptureScreen()));
+  }
+
+  Widget _navIcon(IconData icon, String label, int index) {
+    final selected = _currentIndex == index;
+    final color = selected ? Theme.of(context).primaryColor : Colors.grey;
+    return IconButton(
+      icon: Icon(icon, color: color),
+      tooltip: label,
+      onPressed: () => setState(() => _currentIndex = index),
+    );
   }
 
   @override
@@ -60,14 +78,25 @@ class _HomeScreenState extends State<HomeScreen> {
         ],
       ),
       body: _tabs[_currentIndex],
-      bottomNavigationBar: BottomNavigationBar(
-        currentIndex: _currentIndex,
-        items: const [
-          BottomNavigationBarItem(icon: Icon(Icons.person), label: 'Profile'),
-          BottomNavigationBarItem(icon: Icon(Icons.map), label: 'Map'),
-          BottomNavigationBarItem(icon: Icon(Icons.chat), label: 'Chat'),
-        ],
-        onTap: (index) => setState(() => _currentIndex = index),
+      floatingActionButton: FloatingActionButton(
+        onPressed: _openCatchCapture,
+        tooltip: 'Log a catch',
+        child: const Icon(Icons.camera_alt),
+      ),
+      floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
+      bottomNavigationBar: BottomAppBar(
+        shape: const CircularNotchedRectangle(),
+        notchMargin: 8,
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            _navIcon(Icons.map, 'Map', 0),
+            _navIcon(Icons.leaderboard, 'Leaderboard', 1),
+            const SizedBox(width: 48), // reserved for the notch
+            _navIcon(Icons.chat, 'Chat', 2),
+            _navIcon(Icons.person, 'Profile', 3),
+          ],
+        ),
       ),
     );
   }
