@@ -5,15 +5,18 @@
 /// not listed here (including free-typed manual entries) falls back to
 /// [RarityTier.common] so scoring never breaks on an unrecognized name.
 enum RarityTier {
-  common(1),
-  uncommon(2),
-  rare(4),
-  legendary(8);
+  common(1, 'Common'),
+  uncommon(2, 'Uncommon'),
+  rare(4, 'Rare'),
+  legendary(8, 'Legendary');
 
-  const RarityTier(this.pointsMultiplier);
+  const RarityTier(this.pointsMultiplier, this.label);
 
   /// Multiplied against a catch's length (inches) to get its point value.
   final int pointsMultiplier;
+
+  /// Display name, e.g. for tier pills/chips.
+  final String label;
 }
 
 const Map<String, RarityTier> _speciesRarity = {
