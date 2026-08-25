@@ -23,6 +23,28 @@ class FishingMapOverlays {
   static const empty = FishingMapOverlays();
 }
 
+/// Per-location metadata for a 'fishing_water' marker — enough to drive the
+/// bite-window/tips detail sheet (see LocationDetailSheet). Not needed for
+/// the other CPW categories (boat ramps, Gold Medal lines, etc.), which keep
+/// their plain InfoWindow tooltip instead.
+class FishingLocationDetails {
+  const FishingLocationDetails({
+    required this.name,
+    required this.subtitle,
+    required this.latitude,
+    required this.longitude,
+    this.stocked,
+    this.locType,
+  });
+
+  final String name;
+  final String? subtitle;
+  final double latitude;
+  final double longitude;
+  final String? stocked;
+  final String? locType;
+}
+
 /// Marker hue / line-and-fill color per CPW category, so the different kinds
 /// of fishing-atlas data (a named water body vs. a boat ramp vs. an
 /// accessible area vs. a Gold Medal designation) read as distinct on the map.
@@ -40,7 +62,9 @@ const _polygonColorByCategory = {
   'gold_medal_lake': Color(0xFFC9A227),
 };
 
-Future<FishingMapOverlays> loadFishingOverlays() async {
+Future<FishingMapOverlays> loadFishingOverlays({
+  void Function(FishingLocationDetails details)? onFishingWaterTap,
+}) async {
   final raw = await rootBundle.loadString('assets/data/colorado_fishing_areas.geojson');
   final decoded = jsonDecode(raw) as Map<String, dynamic>;
   final features = (decoded['features'] as List<dynamic>? ?? []);
@@ -63,13 +87,30 @@ Future<FishingMapOverlays> loadFishingOverlays() async {
     switch (geometry['type']) {
       case 'Point':
         final coords = geometry['coordinates'] as List<dynamic>;
+        final lat = (coords[1] as num).toDouble();
+        final lng = (coords[0] as num).toDouble();
+        final isFishingWater = category == 'fishing_water' && onFishingWaterTap != null;
+
         markers.add(Marker(
           markerId: MarkerId(id),
-          position: LatLng((coords[1] as num).toDouble(), (coords[0] as num).toDouble()),
-          infoWindow: InfoWindow(title: name, snippet: subtitle),
+          position: LatLng(lat, lng),
+          // Fishing-water markers open the richer bite-window sheet instead
+          // of the plain tooltip, so the default InfoWindow would be
+          // redundant clutter there.
+          infoWindow: isFishingWater ? InfoWindow.noText : InfoWindow(title: name, snippet: subtitle),
           icon: BitmapDescriptor.defaultMarkerWithHue(
             _markerHueByCategory[category] ?? BitmapDescriptor.hueRed,
           ),
+          onTap: isFishingWater
+              ? () => onFishingWaterTap(FishingLocationDetails(
+                    name: name,
+                    subtitle: subtitle,
+                    latitude: lat,
+                    longitude: lng,
+                    stocked: properties['stocked'] as String?,
+                    locType: properties['locType'] as String?,
+                  ))
+              : null,
         ));
         break;
 

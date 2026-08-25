@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 import '../services/firestore_service.dart';
 import '../utils/geojson_parser.dart';
 import '../widgets/loading_indicator.dart';
+import '../widgets/location_detail_sheet.dart';
 
 class MapScreen extends StatefulWidget {
   const MapScreen({super.key});
@@ -25,9 +26,17 @@ class _MapScreenState extends State<MapScreen> {
   @override
   void initState() {
     super.initState();
-    loadFishingOverlays().then((overlays) {
+    loadFishingOverlays(onFishingWaterTap: _showLocationDetail).then((overlays) {
       if (mounted) setState(() => _overlays = overlays);
     });
+  }
+
+  void _showLocationDetail(FishingLocationDetails details) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      builder: (_) => LocationDetailSheet(details: details),
+    );
   }
 
   @override

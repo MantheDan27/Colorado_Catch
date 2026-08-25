@@ -65,14 +65,22 @@ def main() -> None:
         for feature in data.get("features", []):
             props = feature.get("properties") or {}
             name, subtitle = label_for(category, props)
+            out_props = {
+                "category": category,
+                "name": name,
+                "subtitle": subtitle,
+            }
+            if category == "fishing_water":
+                # Extra fields for the location-detail bite-window/tips sheet
+                # (see lib/data/bite_tips.dart) — STOCKED is a free-text CPW
+                # field (e.g. "Catchable trout and Warmwater"), normalized at
+                # read time, not here.
+                out_props["stocked"] = props.get("STOCKED")
+                out_props["locType"] = props.get("LOC_TYPE")
             features.append({
                 "type": "Feature",
                 "geometry": feature["geometry"],
-                "properties": {
-                    "category": category,
-                    "name": name,
-                    "subtitle": subtitle,
-                },
+                "properties": out_props,
             })
         print(f"  -> {len(data.get('features', []))} features")
 
