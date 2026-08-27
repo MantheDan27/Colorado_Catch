@@ -15,8 +15,10 @@ import '../services/catch_service.dart';
 import '../services/fish_id_service.dart';
 import '../theme/colorado_catch_theme.dart';
 import '../utils/points_calculator.dart';
+import '../utils/record_checker.dart';
 import '../widgets/loading_indicator.dart';
 import 'catch_detail_screen.dart';
+import 'state_record_celebration_screen.dart';
 
 enum _Stage { pickingPhoto, identifying, reviewing, saving, done }
 
@@ -38,6 +40,7 @@ class _CatchCaptureScreenState extends State<CatchCaptureScreen> {
   List<FishSuggestion> _suggestions = [];
   String? _selectedSpecies;
   final _manualSpeciesController = TextEditingController();
+  final _weightController = TextEditingController();
   int _length = 12;
   bool _useManualEntry = false;
   bool _released = true;
@@ -55,6 +58,7 @@ class _CatchCaptureScreenState extends State<CatchCaptureScreen> {
   @override
   void dispose() {
     _manualSpeciesController.dispose();
+    _weightController.dispose();
     super.dispose();
   }
 
@@ -134,6 +138,8 @@ class _CatchCaptureScreenState extends State<CatchCaptureScreen> {
       final matchedSuggestion = _useManualEntry
           ? null
           : _suggestions.firstWhere((s) => s.species == species, orElse: () => FishSuggestion(species: species));
+      final weightText = _weightController.text.trim();
+      final weightLbs = weightText.isEmpty ? null : double.tryParse(weightText);
 
       final result = await catchService.logCatch(
         userId: user.uid,
@@ -145,6 +151,7 @@ class _CatchCaptureScreenState extends State<CatchCaptureScreen> {
             .map((s) => {'species': s.species, 'confidence': s.confidence})
             .toList(growable: false),
         lengthInches: _length.toDouble(),
+        weightLbs: weightLbs,
         released: _released,
         latitude: _position?.latitude,
         longitude: _position?.longitude,
@@ -160,6 +167,29 @@ class _CatchCaptureScreenState extends State<CatchCaptureScreen> {
         );
         _stage = _Stage.done;
       });
+
+      // Fires on top of the Done view once it's on screen — a state record
+      // is a bigger moment than the usual celebration, so it gets its own
+      // full-screen interstitial rather than folding into the badge list.
+      final achievement = checkForStateRecord(
+        species: species,
+        lengthInches: _length.toDouble(),
+        weightLbs: weightLbs,
+      );
+      if (achievement != null) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted) return;
+          Navigator.of(context).push(MaterialPageRoute(
+            fullscreenDialog: true,
+            builder: (_) => StateRecordCelebrationScreen(
+              achievement: achievement,
+              species: species,
+              lengthInches: _length.toDouble(),
+              weightLbs: weightLbs,
+            ),
+          ));
+        });
+      }
     } catch (e) {
       if (!mounted) return;
       setState(() {
@@ -184,6 +214,7 @@ class _CatchCaptureScreenState extends State<CatchCaptureScreen> {
           useManualEntry: _useManualEntry,
           manualController: _manualSpeciesController,
           length: _length,
+          weightController: _weightController,
           released: _released,
           error: _error,
           onSelectSuggestion: (s) => setState(() {
@@ -267,6 +298,7 @@ class _ReviewView extends StatelessWidget {
     required this.useManualEntry,
     required this.manualController,
     required this.length,
+    required this.weightController,
     required this.released,
     required this.error,
     required this.onSelectSuggestion,
@@ -284,6 +316,7 @@ class _ReviewView extends StatelessWidget {
   final bool useManualEntry;
   final TextEditingController manualController;
   final int length;
+  final TextEditingController weightController;
   final bool released;
   final String? error;
   final ValueChanged<String> onSelectSuggestion;
@@ -406,6 +439,19 @@ class _ReviewView extends StatelessWidget {
                         const SizedBox(width: 14),
                         _StepperButton(icon: Icons.add, onTap: () => onLengthDelta(1)),
                       ],
+                    ),
+                    const SizedBox(height: 22),
+                    Text('Weight (optional)', style: Theme.of(context).textTheme.titleMedium),
+                    const SizedBox(height: 6),
+                    Text(
+                      'Weighed it on a certified scale? Add it — CPW state records are tracked by weight, length, or both.',
+                      style: TextStyle(fontSize: 12, color: AppColors.muted),
+                    ),
+                    const SizedBox(height: 10),
+                    TextField(
+                      controller: weightController,
+                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                      decoration: const InputDecoration(labelText: 'Weight', suffixText: 'lbs'),
                     ),
                     const SizedBox(height: 16),
                     SwitchListTile(

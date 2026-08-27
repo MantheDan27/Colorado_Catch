@@ -50,6 +50,7 @@ const Map<String, RarityTier> _speciesRarity = {
   'mackinaw': RarityTier.rare,
   'tiger muskie': RarityTier.rare,
   'arctic grayling': RarityTier.rare,
+  'arctic char': RarityTier.rare,
   'golden trout': RarityTier.rare,
   'cutbow': RarityTier.rare,
   'snake river cutthroat': RarityTier.rare,

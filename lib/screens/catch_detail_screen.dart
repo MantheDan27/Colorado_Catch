@@ -36,6 +36,7 @@ class CatchDetailScreen extends StatelessWidget {
 
           final species = data['species'] as String? ?? 'Unknown';
           final lengthInches = (data['lengthInches'] as num?)?.toDouble() ?? 0;
+          final weightLbs = (data['weightLbs'] as num?)?.toDouble();
           final points = data['points'] as int? ?? 0;
           final tier = rarityOf(species);
           final confidence = (data['speciesConfidence'] as num?)?.toDouble();
@@ -137,6 +138,10 @@ class CatchDetailScreen extends StatelessWidget {
                           ),
                         ],
                       ),
+                      if (weightLbs != null) ...[
+                        const SizedBox(height: 10),
+                        _StatTile(label: 'Weight', value: '${weightLbs.toStringAsFixed(2)} lbs'),
+                      ],
                     ],
                   ),
                 ),
