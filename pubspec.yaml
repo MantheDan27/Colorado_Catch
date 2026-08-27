@@ -1,7 +1,7 @@
 name: colorado_catch
 description: A multiplatform Flutter app for discovering and tracking Colorado fishing.
 publish_to: 'none'
-version: 0.3.0+3
+version: 0.4.0+4
 environment:
   sdk: ^3.12.2
 
@@ -27,6 +27,8 @@ dependencies:
   image_picker: ^1.2.3
   http: ^1.2.0 # Fishial.AI species-ID REST calls — see FishIdService.
   geolocator: ^13.0.0 # best-effort catch location for the map pin.
+  url_launcher: ^6.3.0 # hands off to the device's maps app for directions.
+  google_fonts: ^6.2.1 # Instrument Serif / Familjen Grotesk — see lib/theme/.
 
 dev_dependencies:
   flutter_test:

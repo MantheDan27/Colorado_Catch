@@ -8,6 +8,7 @@ class FirestoreService {
   CollectionReference get chats => _firestore.collection('chats');
   CollectionReference get locations => _firestore.collection('locations');
   CollectionReference get leaderboard => _firestore.collection('leaderboard');
+  CollectionReference get catches => _firestore.collection('catches');
 
   Future<void> saveUserProfile(UserProfile profile) {
     return profiles.doc(profile.uid).set(profile.toMap(), SetOptions(merge: true));
@@ -47,5 +48,15 @@ class FirestoreService {
   /// A single user's leaderboard doc — used for the coin pill on HomeScreen.
   Stream<DocumentSnapshot> leaderboardEntry(String uid) {
     return leaderboard.doc(uid).snapshots();
+  }
+
+  /// A single user's own catches, newest first — backs the Log tab and the
+  /// profile stats (distinct species, biggest catch).
+  Stream<QuerySnapshot> userCatchesStream(String uid) {
+    return catches.where('userId', isEqualTo: uid).orderBy('createdAt', descending: true).snapshots();
+  }
+
+  Stream<DocumentSnapshot> catchDetail(String catchId) {
+    return catches.doc(catchId).snapshots();
   }
 }

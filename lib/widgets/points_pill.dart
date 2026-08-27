@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../services/firestore_service.dart';
+import '../theme/colorado_catch_theme.dart';
 
 /// Small rounded badge showing the signed-in user's total leaderboard
 /// points ("coins") — see lib/utils/points_calculator.dart for how points
@@ -26,15 +27,15 @@ class PointsPill extends StatelessWidget {
           margin: const EdgeInsets.symmetric(vertical: 12),
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
           decoration: BoxDecoration(
-            color: Colors.amber.withValues(alpha: 0.18),
+            color: AppColors.amber.withValues(alpha: 0.18),
             borderRadius: BorderRadius.circular(20),
           ),
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(Icons.monetization_on, color: Colors.amber, size: 18),
+              const Icon(Icons.monetization_on, color: AppColors.amber, size: 18),
               const SizedBox(width: 4),
-              Text('$points', style: const TextStyle(fontWeight: FontWeight.bold)),
+              Text('$points', style: const TextStyle(fontWeight: FontWeight.bold, color: AppColors.ink)),
             ],
           ),
         );

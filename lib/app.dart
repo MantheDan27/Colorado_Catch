@@ -14,6 +14,7 @@ import 'services/fish_id_service.dart';
 import 'services/firestore_service.dart';
 import 'services/push_service.dart';
 import 'services/storage_service.dart';
+import 'theme/colorado_catch_theme.dart';
 import 'widgets/loading_indicator.dart';
 
 class App extends StatelessWidget {
@@ -33,11 +34,7 @@ class App extends StatelessWidget {
       ],
       child: MaterialApp(
         title: 'Colorado Catch',
-        theme: ThemeData(
-          primarySwatch: Colors.blue,
-          scaffoldBackgroundColor: Colors.grey[50],
-          appBarTheme: const AppBarTheme(elevation: 0),
-        ),
+        theme: buildColoradoCatchTheme(),
         home: const AuthenticationWrapper(),
       ),
     );
@@ -54,6 +51,10 @@ class AuthenticationWrapper extends StatefulWidget {
 class _AuthenticationWrapperState extends State<AuthenticationWrapper> {
   bool _initialized = false;
   bool _showSplash = true;
+  // Which of the onboarding screen's two CTAs was tapped — "Start fishing"
+  // pre-selects account creation, "I already have an account" pre-selects
+  // sign-in. Only meaningful once _showSplash flips false.
+  bool _startInRegisterMode = false;
 
   @override
   void didChangeDependencies() {
@@ -72,7 +73,16 @@ class _AuthenticationWrapperState extends State<AuthenticationWrapper> {
   @override
   Widget build(BuildContext context) {
     if (_showSplash) {
-      return SplashScreen(onStart: () => setState(() => _showSplash = false));
+      return SplashScreen(
+        onStartFishing: () => setState(() {
+          _showSplash = false;
+          _startInRegisterMode = true;
+        }),
+        onHaveAccount: () => setState(() {
+          _showSplash = false;
+          _startInRegisterMode = false;
+        }),
+      );
     }
 
     final authService = Provider.of<AuthService>(context);
@@ -88,7 +98,7 @@ class _AuthenticationWrapperState extends State<AuthenticationWrapper> {
           return const HomeScreen();
         }
 
-        return const LoginScreen();
+        return LoginScreen(initialRegistering: _startInRegisterMode);
       },
     );
   }

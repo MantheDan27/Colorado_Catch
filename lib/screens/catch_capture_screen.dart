@@ -3,22 +3,30 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 
+import '../data/badges.dart';
+import '../data/species_rarity.dart';
 import '../models/fish_suggestion.dart';
 import '../services/auth_service.dart';
 import '../services/catch_service.dart';
 import '../services/fish_id_service.dart';
+import '../theme/colorado_catch_theme.dart';
 import '../utils/points_calculator.dart';
+import '../utils/record_checker.dart';
 import '../widgets/loading_indicator.dart';
+import 'catch_detail_screen.dart';
+import 'state_record_celebration_screen.dart';
 
-enum _Stage { pickingPhoto, identifying, reviewing, saving }
+enum _Stage { pickingPhoto, identifying, reviewing, saving, done }
 
 /// Pushed from the home screen's center camera button: photo -> AI species
-/// suggestion (Fishial.AI) -> manual-correction fallback -> log the catch.
-/// Catch photos aren't persisted for this MVP (Cloud Storage needs a Blaze
-/// upgrade — see SETUP.md); the photo is used transiently for AI ID only.
+/// suggestion (Fishial.AI) -> manual-correction fallback -> log the catch ->
+/// a celebration screen. Catch photos aren't persisted for this MVP (Cloud
+/// Storage needs a Blaze upgrade — see SETUP.md); the photo is used
+/// transiently for AI ID and the review-screen thumbnail only.
 class CatchCaptureScreen extends StatefulWidget {
   const CatchCaptureScreen({super.key});
 
@@ -28,13 +36,18 @@ class CatchCaptureScreen extends StatefulWidget {
 
 class _CatchCaptureScreenState extends State<CatchCaptureScreen> {
   _Stage _stage = _Stage.pickingPhoto;
+  File? _photo;
   List<FishSuggestion> _suggestions = [];
   String? _selectedSpecies;
   final _manualSpeciesController = TextEditingController();
-  final _lengthController = TextEditingController();
+  final _weightController = TextEditingController();
+  int _length = 12;
   bool _useManualEntry = false;
+  bool _released = true;
   String? _error;
   Position? _position;
+  CatchLogResult? _result;
+  List<CatchBadge> _newBadges = [];
 
   @override
   void initState() {
@@ -45,7 +58,7 @@ class _CatchCaptureScreenState extends State<CatchCaptureScreen> {
   @override
   void dispose() {
     _manualSpeciesController.dispose();
-    _lengthController.dispose();
+    _weightController.dispose();
     super.dispose();
   }
 
@@ -57,12 +70,16 @@ class _CatchCaptureScreenState extends State<CatchCaptureScreen> {
       return;
     }
 
-    setState(() => _stage = _Stage.identifying);
+    final file = File(picked.path);
+    setState(() {
+      _photo = file;
+      _stage = _Stage.identifying;
+    });
     unawaited(_fetchLocation());
 
     final fishIdService = Provider.of<FishIdService>(context, listen: false);
     try {
-      final suggestions = await fishIdService.identify(File(picked.path));
+      final suggestions = await fishIdService.identify(file);
       if (!mounted) return;
       setState(() {
         _suggestions = suggestions;
@@ -112,12 +129,6 @@ class _CatchCaptureScreenState extends State<CatchCaptureScreen> {
       return;
     }
 
-    final lengthInches = double.tryParse(_lengthController.text.trim());
-    if (lengthInches == null || lengthInches <= 0) {
-      setState(() => _error = 'Enter the fish\'s length in inches.');
-      return;
-    }
-
     setState(() {
       _stage = _Stage.saving;
       _error = null;
@@ -127,8 +138,10 @@ class _CatchCaptureScreenState extends State<CatchCaptureScreen> {
       final matchedSuggestion = _useManualEntry
           ? null
           : _suggestions.firstWhere((s) => s.species == species, orElse: () => FishSuggestion(species: species));
+      final weightText = _weightController.text.trim();
+      final weightLbs = weightText.isEmpty ? null : double.tryParse(weightText);
 
-      await catchService.logCatch(
+      final result = await catchService.logCatch(
         userId: user.uid,
         userName: user.displayName ?? user.email ?? 'Angler',
         species: species,
@@ -137,12 +150,46 @@ class _CatchCaptureScreenState extends State<CatchCaptureScreen> {
         aiSuggestions: _suggestions
             .map((s) => {'species': s.species, 'confidence': s.confidence})
             .toList(growable: false),
-        lengthInches: lengthInches,
+        lengthInches: _length.toDouble(),
+        weightLbs: weightLbs,
+        released: _released,
         latitude: _position?.latitude,
         longitude: _position?.longitude,
       );
 
-      if (mounted) Navigator.of(context).pop();
+      if (!mounted) return;
+      setState(() {
+        _result = result;
+        _newBadges = newlyUnlockedBadges(
+          priorCatchCount: result.priorCatchCount,
+          priorHadRareOrBetter: result.priorHadRareOrBetter,
+          newCatchTier: result.tier,
+        );
+        _stage = _Stage.done;
+      });
+
+      // Fires on top of the Done view once it's on screen — a state record
+      // is a bigger moment than the usual celebration, so it gets its own
+      // full-screen interstitial rather than folding into the badge list.
+      final achievement = checkForStateRecord(
+        species: species,
+        lengthInches: _length.toDouble(),
+        weightLbs: weightLbs,
+      );
+      if (achievement != null) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted) return;
+          Navigator.of(context).push(MaterialPageRoute(
+            fullscreenDialog: true,
+            builder: (_) => StateRecordCelebrationScreen(
+              achievement: achievement,
+              species: species,
+              lengthInches: _length.toDouble(),
+              weightLbs: weightLbs,
+            ),
+          ));
+        });
+      }
     } catch (e) {
       if (!mounted) return;
       setState(() {
@@ -152,107 +199,491 @@ class _CatchCaptureScreenState extends State<CatchCaptureScreen> {
     }
   }
 
+  String get _species => _useManualEntry ? _manualSpeciesController.text.trim() : (_selectedSpecies ?? '');
+
   @override
   Widget build(BuildContext context) {
+    return switch (_stage) {
+      _Stage.pickingPhoto => const _BrandedLoading(),
+      _Stage.identifying => const _IdentifyingView(),
+      _Stage.saving => const _BrandedLoading(dark: false),
+      _Stage.reviewing => _ReviewView(
+          photo: _photo,
+          suggestions: _suggestions,
+          selectedSpecies: _selectedSpecies,
+          useManualEntry: _useManualEntry,
+          manualController: _manualSpeciesController,
+          length: _length,
+          weightController: _weightController,
+          released: _released,
+          error: _error,
+          onSelectSuggestion: (s) => setState(() {
+            _selectedSpecies = s;
+            _useManualEntry = false;
+          }),
+          onToggleManual: (v) => setState(() => _useManualEntry = v),
+          onManualChanged: () => setState(() {}),
+          onLengthDelta: (d) => setState(() => _length = (_length + d).clamp(1, 60)),
+          onReleasedChanged: (v) => setState(() => _released = v),
+          onConfirm: _confirm,
+          onCancel: () => Navigator.of(context).pop(),
+        ),
+      _Stage.done => _DoneView(
+          result: _result!,
+          species: _species,
+          length: _length,
+          badges: _newBadges,
+        ),
+    };
+  }
+}
+
+class _BrandedLoading extends StatelessWidget {
+  const _BrandedLoading({this.dark = true});
+
+  final bool dark;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      color: dark ? AppColors.forest : AppColors.cream,
+      child: const Center(child: LoadingIndicator()),
+    );
+  }
+}
+
+class _IdentifyingView extends StatelessWidget {
+  const _IdentifyingView();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      color: AppColors.forest,
+      child: Center(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 40),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              SizedBox(
+                width: 76,
+                height: 76,
+                child: CircularProgressIndicator(strokeWidth: 3, color: AppColors.amber),
+              ),
+              const SizedBox(height: 22),
+              Text(
+                'Identifying species…',
+                textAlign: TextAlign.center,
+                style: GoogleFonts.instrumentSerif(fontSize: 26, color: Colors.white),
+              ),
+              const SizedBox(height: 12),
+              Text(
+                'Matching fin shape and spotting against the Fishial reference set.',
+                textAlign: TextAlign.center,
+                style: GoogleFonts.familjenGrotesk(fontSize: 14, color: Colors.white.withValues(alpha: 0.65)),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ReviewView extends StatelessWidget {
+  const _ReviewView({
+    required this.photo,
+    required this.suggestions,
+    required this.selectedSpecies,
+    required this.useManualEntry,
+    required this.manualController,
+    required this.length,
+    required this.weightController,
+    required this.released,
+    required this.error,
+    required this.onSelectSuggestion,
+    required this.onToggleManual,
+    required this.onManualChanged,
+    required this.onLengthDelta,
+    required this.onReleasedChanged,
+    required this.onConfirm,
+    required this.onCancel,
+  });
+
+  final File? photo;
+  final List<FishSuggestion> suggestions;
+  final String? selectedSpecies;
+  final bool useManualEntry;
+  final TextEditingController manualController;
+  final int length;
+  final TextEditingController weightController;
+  final bool released;
+  final String? error;
+  final ValueChanged<String> onSelectSuggestion;
+  final ValueChanged<bool> onToggleManual;
+  final VoidCallback onManualChanged;
+  final ValueChanged<int> onLengthDelta;
+  final ValueChanged<bool> onReleasedChanged;
+  final VoidCallback onConfirm;
+  final VoidCallback onCancel;
+
+  @override
+  Widget build(BuildContext context) {
+    final species = useManualEntry ? manualController.text.trim() : selectedSpecies;
+    final hasValidSpecies = species != null && species.isNotEmpty;
+    final tier = hasValidSpecies ? rarityOf(species) : null;
+    final points = hasValidSpecies ? calculateCatchPoints(species: species, lengthInches: length.toDouble()) : 0;
+
     return Scaffold(
-      appBar: AppBar(title: const Text('Log a Catch')),
-      body: switch (_stage) {
-        _Stage.pickingPhoto => const LoadingIndicator(),
-        _Stage.identifying => const Center(
-            child: Padding(
-              padding: EdgeInsets.all(24),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
+      backgroundColor: AppColors.cream,
+      body: SafeArea(
+        child: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+              child: Row(
                 children: [
-                  LoadingIndicator(),
-                  SizedBox(height: 16),
-                  Text('Identifying species…'),
+                  IconButton(onPressed: onCancel, icon: const Icon(Icons.close)),
+                  const SizedBox(width: 6),
+                  Text('Confirm your catch', style: Theme.of(context).textTheme.titleLarge),
                 ],
               ),
             ),
-          ),
-        _Stage.saving => const LoadingIndicator(),
-        _Stage.reviewing => _buildReview(),
-      },
+            Expanded(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.fromLTRB(22, 6, 22, 24),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(14),
+                          child: photo != null
+                              ? Image.file(photo!, width: 76, height: 76, fit: BoxFit.cover)
+                              : Container(width: 76, height: 76, color: AppColors.paper),
+                        ),
+                        const SizedBox(width: 14),
+                        Expanded(
+                          child: Text(
+                            'Best match below. Pick the right one — points depend on species rarity.',
+                            style: Theme.of(context).textTheme.bodyMedium,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 18),
+                    for (final s in suggestions)
+                      _SuggestionCard(
+                        suggestion: s,
+                        selected: !useManualEntry && selectedSpecies == s.species,
+                        onTap: () => onSelectSuggestion(s.species),
+                      ),
+                    InkWell(
+                      onTap: () => onToggleManual(true),
+                      child: Container(
+                        margin: const EdgeInsets.only(top: 4, bottom: 4),
+                        padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 13),
+                        decoration: BoxDecoration(
+                          border: Border.all(
+                            color: useManualEntry ? AppColors.forest : AppColors.ink.withValues(alpha: 0.18),
+                            width: 1.5,
+                          ),
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        child: Text(
+                          "None of these — I'll type it",
+                          style: GoogleFonts.familjenGrotesk(fontSize: 13.5, color: AppColors.mutedDark),
+                        ),
+                      ),
+                    ),
+                    if (useManualEntry)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 8),
+                        child: TextField(
+                          controller: manualController,
+                          decoration: const InputDecoration(labelText: 'Species name'),
+                          onChanged: (_) => onManualChanged(),
+                        ),
+                      ),
+                    const SizedBox(height: 22),
+                    Text('Length', style: Theme.of(context).textTheme.titleMedium),
+                    const SizedBox(height: 10),
+                    Row(
+                      children: [
+                        _StepperButton(icon: Icons.remove, onTap: () => onLengthDelta(-1)),
+                        const SizedBox(width: 14),
+                        Expanded(
+                          child: Container(
+                            height: 46,
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(14),
+                              border: Border.all(color: AppColors.ink.withValues(alpha: 0.12)),
+                            ),
+                            child: Center(
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                crossAxisAlignment: CrossAxisAlignment.baseline,
+                                textBaseline: TextBaseline.alphabetic,
+                                children: [
+                                  Text('$length', style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w600)),
+                                  const SizedBox(width: 6),
+                                  Text('inches', style: TextStyle(fontSize: 14, color: AppColors.muted)),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 14),
+                        _StepperButton(icon: Icons.add, onTap: () => onLengthDelta(1)),
+                      ],
+                    ),
+                    const SizedBox(height: 22),
+                    Text('Weight (optional)', style: Theme.of(context).textTheme.titleMedium),
+                    const SizedBox(height: 6),
+                    Text(
+                      'Weighed it on a certified scale? Add it — CPW state records are tracked by weight, length, or both.',
+                      style: TextStyle(fontSize: 12, color: AppColors.muted),
+                    ),
+                    const SizedBox(height: 10),
+                    TextField(
+                      controller: weightController,
+                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                      decoration: const InputDecoration(labelText: 'Weight', suffixText: 'lbs'),
+                    ),
+                    const SizedBox(height: 16),
+                    SwitchListTile(
+                      contentPadding: EdgeInsets.zero,
+                      value: released,
+                      onChanged: onReleasedChanged,
+                      title: const Text('Released'),
+                      subtitle: const Text('Catch & release — many rare/native species require this.'),
+                      activeThumbColor: AppColors.forest,
+                    ),
+                    const SizedBox(height: 6),
+                    if (hasValidSpecies)
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
+                        decoration: BoxDecoration(color: AppColors.forest, borderRadius: BorderRadius.circular(18)),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  '$length in × ×${tier!.pointsMultiplier}',
+                                  style: GoogleFonts.familjenGrotesk(fontSize: 12, color: Colors.white70),
+                                ),
+                                Text(
+                                  '$points points',
+                                  style: GoogleFonts.instrumentSerif(fontSize: 26, color: Colors.white),
+                                ),
+                              ],
+                            ),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                              decoration: BoxDecoration(color: AppColors.amber, borderRadius: BorderRadius.circular(14)),
+                              child: Text(
+                                tier.label,
+                                style: const TextStyle(fontWeight: FontWeight.w600, color: AppColors.ink, fontSize: 12),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    if (error != null) ...[
+                      const SizedBox(height: 16),
+                      Text(error!, style: const TextStyle(color: Colors.red)),
+                    ],
+                    const SizedBox(height: 18),
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton(
+                        onPressed: hasValidSpecies ? onConfirm : null,
+                        style: ElevatedButton.styleFrom(backgroundColor: AppColors.amber, foregroundColor: AppColors.ink),
+                        child: const Text('Log catch'),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
+}
 
-  Widget _buildReview() {
-    return ListView(
-      padding: const EdgeInsets.all(16),
-      children: [
-        if (_suggestions.isNotEmpty) ...[
-          const Text('AI species suggestions', style: TextStyle(fontWeight: FontWeight.bold)),
-          const SizedBox(height: 8),
-          for (final suggestion in _suggestions)
-            RadioListTile<String>(
-              value: suggestion.species,
-              // ignore: deprecated_member_use
-              groupValue: _useManualEntry ? null : _selectedSpecies,
-              title: Text(suggestion.species),
-              subtitle: suggestion.confidence != null
-                  ? Text('${(suggestion.confidence! * 100).toStringAsFixed(0)}% confidence')
-                  : null,
-              // ignore: deprecated_member_use
-              onChanged: (value) => setState(() {
-                _selectedSpecies = value;
-                _useManualEntry = false;
-              }),
-            ),
-          const SizedBox(height: 8),
-        ],
-        CheckboxListTile(
-          value: _useManualEntry,
-          title: const Text("None of these — I'll enter it myself"),
-          onChanged: (value) => setState(() => _useManualEntry = value ?? false),
+class _SuggestionCard extends StatelessWidget {
+  const _SuggestionCard({required this.suggestion, required this.selected, required this.onTap});
+
+  final FishSuggestion suggestion;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final pct = suggestion.confidence != null ? (suggestion.confidence! * 100).clamp(0, 100) : 0.0;
+    final tier = rarityOf(suggestion.species);
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 13),
+        decoration: BoxDecoration(
+          border: Border.all(color: selected ? AppColors.forest : AppColors.ink.withValues(alpha: 0.1), width: 1.5),
+          borderRadius: BorderRadius.circular(16),
+          color: selected ? AppColors.forest.withValues(alpha: 0.06) : Colors.white,
         ),
-        if (_useManualEntry)
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: TextField(
-              controller: _manualSpeciesController,
-              decoration: const InputDecoration(labelText: 'Species name'),
-              onChanged: (_) => setState(() {}),
+        child: Row(
+          children: [
+            Icon(
+              selected ? Icons.radio_button_checked : Icons.radio_button_off,
+              color: selected ? AppColors.forest : AppColors.ink.withValues(alpha: 0.3),
+              size: 20,
             ),
-          ),
-        const SizedBox(height: 16),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: TextField(
-            controller: _lengthController,
-            decoration: const InputDecoration(labelText: 'Length (inches)'),
-            keyboardType: const TextInputType.numberWithOptions(decimal: true),
-            onChanged: (_) => setState(() {}),
-          ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(suggestion.species, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14.5)),
+                      if (suggestion.confidence != null)
+                        Text('${pct.toStringAsFixed(0)}%', style: TextStyle(color: AppColors.muted, fontSize: 12.5)),
+                    ],
+                  ),
+                  const SizedBox(height: 5),
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(2),
+                    child: LinearProgressIndicator(
+                      value: pct / 100,
+                      minHeight: 4,
+                      backgroundColor: AppColors.ink.withValues(alpha: 0.08),
+                      color: tierColor(tier),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
         ),
-        const SizedBox(height: 8),
-        _buildPointsPreview(),
-        const SizedBox(height: 16),
-        if (_error != null) ...[
-          Text(_error!, style: const TextStyle(color: Colors.red)),
-          const SizedBox(height: 16),
-        ],
-        ElevatedButton(onPressed: _confirm, child: const Text('Log Catch')),
-      ],
+      ),
     );
   }
+}
 
-  Widget _buildPointsPreview() {
-    final species = _useManualEntry ? _manualSpeciesController.text.trim() : _selectedSpecies;
-    final lengthInches = double.tryParse(_lengthController.text.trim());
-    if (species == null || species.isEmpty || lengthInches == null || lengthInches <= 0) {
-      return const SizedBox.shrink();
-    }
+class _StepperButton extends StatelessWidget {
+  const _StepperButton({required this.icon, required this.onTap});
 
-    final points = calculateCatchPoints(species: species, lengthInches: lengthInches);
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      child: Row(
-        children: [
-          const Icon(Icons.monetization_on, color: Colors.amber),
-          const SizedBox(width: 8),
-          Text('Worth $points points', style: const TextStyle(fontWeight: FontWeight.bold)),
-        ],
+  final IconData icon;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.white,
+      shape: const CircleBorder(side: BorderSide(color: Color(0x24101A17))),
+      child: InkWell(
+        customBorder: const CircleBorder(),
+        onTap: onTap,
+        child: SizedBox(width: 46, height: 46, child: Icon(icon, color: AppColors.ink)),
+      ),
+    );
+  }
+}
+
+class _DoneView extends StatelessWidget {
+  const _DoneView({required this.result, required this.species, required this.length, required this.badges});
+
+  final CatchLogResult result;
+  final String species;
+  final int length;
+  final List<CatchBadge> badges;
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: AppColors.forest,
+      body: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 30),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Text(
+                'CATCH LOGGED',
+                style: GoogleFonts.familjenGrotesk(fontSize: 12, letterSpacing: 3.5, color: Colors.white60),
+              ),
+              const SizedBox(height: 14),
+              Text('+${result.points}', style: GoogleFonts.instrumentSerif(fontSize: 54, color: AppColors.amber)),
+              const SizedBox(height: 8),
+              Text('$species, $length in', style: GoogleFonts.instrumentSerif(fontSize: 30, color: Colors.white)),
+              const SizedBox(height: 12),
+              Text(
+                'Added to your log and pinned to the map.',
+                style: GoogleFonts.familjenGrotesk(fontSize: 14.5, height: 1.5, color: Colors.white70),
+              ),
+              for (final badge in badges) ...[
+                const SizedBox(height: 22),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.08),
+                    borderRadius: BorderRadius.circular(18),
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 46,
+                        height: 46,
+                        decoration: BoxDecoration(color: AppColors.amber, borderRadius: BorderRadius.circular(16)),
+                        child: Center(
+                          child: Text(badge.glyph, style: GoogleFonts.instrumentSerif(fontSize: 20, color: AppColors.ink)),
+                        ),
+                      ),
+                      const SizedBox(width: 14),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text('Badge unlocked — ${badge.name}',
+                                style: const TextStyle(fontWeight: FontWeight.w600, color: Colors.white)),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+              const SizedBox(height: 30),
+              ElevatedButton(
+                onPressed: () => Navigator.of(context).pushReplacement(
+                  MaterialPageRoute(builder: (_) => CatchDetailScreen(catchId: result.catchId)),
+                ),
+                style: ElevatedButton.styleFrom(backgroundColor: AppColors.amber, foregroundColor: AppColors.ink),
+                child: const Text('See the catch'),
+              ),
+              const SizedBox(height: 11),
+              OutlinedButton(
+                onPressed: () => Navigator.of(context).pop('toMap'),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: Colors.white,
+                  side: BorderSide(color: Colors.white.withValues(alpha: 0.3)),
+                ),
+                child: const Text('Back to the map'),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

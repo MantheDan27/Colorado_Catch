@@ -14,19 +14,25 @@ class FishingMapOverlays {
     this.markers = const {},
     this.polylines = const {},
     this.polygons = const {},
+    this.fishingWaterLocations = const [],
   });
 
+  /// Boat ramps, accessible areas — simple categories with no per-location
+  /// detail screen. Fishing-water points are NOT included here; MapScreen
+  /// builds their markers itself from [fishingWaterLocations] so it can
+  /// filter/number them (species chips, "top matches") — see map_screen.dart.
   final Set<Marker> markers;
   final Set<Polyline> polylines;
   final Set<Polygon> polygons;
+  final List<FishingLocationDetails> fishingWaterLocations;
 
   static const empty = FishingMapOverlays();
 }
 
-/// Per-location metadata for a 'fishing_water' marker — enough to drive the
-/// bite-window/tips detail sheet (see LocationDetailSheet). Not needed for
-/// the other CPW categories (boat ramps, Gold Medal lines, etc.), which keep
-/// their plain InfoWindow tooltip instead.
+/// Per-location metadata for a 'fishing_water' point — enough to drive the
+/// full-screen Spot detail (see spot_screen.dart). Not needed for the other
+/// CPW categories (boat ramps, Gold Medal lines, etc.), which keep their
+/// plain InfoWindow tooltip instead.
 class FishingLocationDetails {
   const FishingLocationDetails({
     required this.name,
@@ -62,9 +68,7 @@ const _polygonColorByCategory = {
   'gold_medal_lake': Color(0xFFC9A227),
 };
 
-Future<FishingMapOverlays> loadFishingOverlays({
-  void Function(FishingLocationDetails details)? onFishingWaterTap,
-}) async {
+Future<FishingMapOverlays> loadFishingOverlays() async {
   final raw = await rootBundle.loadString('assets/data/colorado_fishing_areas.geojson');
   final decoded = jsonDecode(raw) as Map<String, dynamic>;
   final features = (decoded['features'] as List<dynamic>? ?? []);
@@ -72,6 +76,7 @@ Future<FishingMapOverlays> loadFishingOverlays({
   final markers = <Marker>{};
   final polylines = <Polyline>{};
   final polygons = <Polygon>{};
+  final fishingWaterLocations = <FishingLocationDetails>[];
 
   for (var i = 0; i < features.length; i++) {
     final feature = features[i] as Map<String, dynamic>;
@@ -89,28 +94,26 @@ Future<FishingMapOverlays> loadFishingOverlays({
         final coords = geometry['coordinates'] as List<dynamic>;
         final lat = (coords[1] as num).toDouble();
         final lng = (coords[0] as num).toDouble();
-        final isFishingWater = category == 'fishing_water' && onFishingWaterTap != null;
+
+        if (category == 'fishing_water') {
+          fishingWaterLocations.add(FishingLocationDetails(
+            name: name,
+            subtitle: subtitle,
+            latitude: lat,
+            longitude: lng,
+            stocked: properties['stocked'] as String?,
+            locType: properties['locType'] as String?,
+          ));
+          break;
+        }
 
         markers.add(Marker(
           markerId: MarkerId(id),
           position: LatLng(lat, lng),
-          // Fishing-water markers open the richer bite-window sheet instead
-          // of the plain tooltip, so the default InfoWindow would be
-          // redundant clutter there.
-          infoWindow: isFishingWater ? InfoWindow.noText : InfoWindow(title: name, snippet: subtitle),
+          infoWindow: InfoWindow(title: name, snippet: subtitle),
           icon: BitmapDescriptor.defaultMarkerWithHue(
             _markerHueByCategory[category] ?? BitmapDescriptor.hueRed,
           ),
-          onTap: isFishingWater
-              ? () => onFishingWaterTap(FishingLocationDetails(
-                    name: name,
-                    subtitle: subtitle,
-                    latitude: lat,
-                    longitude: lng,
-                    stocked: properties['stocked'] as String?,
-                    locType: properties['locType'] as String?,
-                  ))
-              : null,
         ));
         break;
 
@@ -138,7 +141,12 @@ Future<FishingMapOverlays> loadFishingOverlays({
     }
   }
 
-  return FishingMapOverlays(markers: markers, polylines: polylines, polygons: polygons);
+  return FishingMapOverlays(
+    markers: markers,
+    polylines: polylines,
+    polygons: polygons,
+    fishingWaterLocations: fishingWaterLocations,
+  );
 }
 
 Polyline _polylineFrom(String id, String name, List<dynamic> coordinates, String category) {
